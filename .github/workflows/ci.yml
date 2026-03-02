@@ -1,0 +1,211 @@
+# ============================================================
+# GitHub Actions CI Workflow
+#
+# This workflow runs automated checks (lint, type-check, tests)
+# using pre-commit every time:
+#   - A Pull Request is updated
+#   - Code is pushed to main
+#
+# Think of CI as:
+#   "The automated reviewer that never forgets to check anything."
+# ============================================================
+
+name: CI
+
+# ------------------------------------------------------------
+# WHEN does this workflow run?
+# ------------------------------------------------------------
+on:
+  pull_request:
+    # These PR events trigger CI:
+    # - opened              ? new PR created
+    # - synchronize         ? new commits pushed to PR branch
+    # - reopened            ? closed PR reopened
+    # - ready_for_review    ? draft PR marked ready
+    types: [opened, synchronize, reopened, ready_for_review]
+
+  push:
+    # Also run when pushing directly to main.
+    # This protects main in case someone bypasses PR workflow.
+    branches: [main]
+
+
+# ------------------------------------------------------------
+# Concurrency Control
+# ------------------------------------------------------------
+# Problem:
+# If you push 5 commits quickly,
+# GitHub would normally run 5 CI jobs.
+#
+# Solution:
+# Cancel older runs and keep only the latest.
+#
+# ${{
+#   github.workflow ? name of this workflow ("CI")
+#   github.ref      ? branch or PR ref
+# }}
+#
+# So runs are grouped by workflow + branch.
+#
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+
+# ------------------------------------------------------------
+# Security: Least Privilege
+# ------------------------------------------------------------
+# GitHub provides an automatic token to workflows.
+#
+# We restrict it to read-only access.
+# This workflow does not need permission to:
+#   - push code
+#   - create releases
+#   - modify repository contents
+#
+permissions:
+  contents: read
+
+
+jobs:
+  precommit:
+    name: pre-commit (lint/format/tests)
+
+    # --------------------------------------------------------
+    # What machine does this run on?
+    # --------------------------------------------------------
+    # Pin OS version for stability.
+    #
+    # "ubuntu-latest" can change over time.
+    # Pinning avoids surprise breakages mid-semester.
+    #
+    runs-on: ubuntu-24.04
+
+
+    steps:
+      # ------------------------------------------------------
+      # Step 1: Download the repository
+      # ------------------------------------------------------
+      - name: Checkout
+        # This clones your repo into the CI virtual machine.
+        # Without this step, the runner has no code to test.
+        uses: actions/checkout@v4
+
+
+      # ------------------------------------------------------
+      # Step 2: Install Python
+      # ------------------------------------------------------
+      - name: Set up Python
+        id: py
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+        # "id: py" allows later steps to reference:
+        #   steps.py.outputs.python-version
+
+
+      # ------------------------------------------------------
+      # Step 3: Install Poetry
+      # ------------------------------------------------------
+      - name: Install Poetry
+        uses: abatilo/actions-poetry@v3
+        with:
+          poetry-version: "2.2.0"
+
+
+      # ------------------------------------------------------
+      # Step 4: Force virtualenv inside project
+      # ------------------------------------------------------
+      - name: Enable in-project venv
+        # By default Poetry may store virtualenvs globally.
+        #
+        # We force it into .venv inside this repo
+        # so we can cache it between CI runs.
+        #
+        run: poetry config virtualenvs.in-project true
+
+
+      # ------------------------------------------------------
+      # Step 5: Cache the virtual environment
+      # ------------------------------------------------------
+      - name: Cache Poetry venv
+        uses: actions/cache@v4
+        with:
+          path: .venv
+
+          # Cache key explanation:
+          #
+          # runner.os ? OS (ubuntu-24.04)
+          # python version ? 3.12
+          # hashFiles('poetry.lock')
+          #     ? hash of dependency lock file
+          #
+          # If dependencies change,
+          # the hash changes,
+          # so cache is rebuilt automatically.
+          #
+          key: venv-${{ runner.os }}-${{ steps.py.outputs.python-version }}-${{ hashFiles('poetry.lock') }}
+
+          # restore-keys:
+          # If exact match not found,
+          # allow reuse of cache with same OS + Python.
+          #
+          restore-keys: |
+            venv-${{ runner.os }}-${{ steps.py.outputs.python-version }}-
+
+
+      # ------------------------------------------------------
+      # Step 6: Cache pre-commit environments
+      # ------------------------------------------------------
+      - name: Cache pre-commit environments
+        uses: actions/cache@v4
+        with:
+          # pre-commit installs hook environments here:
+          # ~/.cache/pre-commit
+          #
+          path: ~/.cache/pre-commit
+
+          # Cache tied to:
+          # - OS
+          # - Python version
+          # - .pre-commit-config.yaml
+          #
+          # If you update hook versions,
+          # this cache invalidates automatically.
+          #
+          key: precommit-${{ runner.os }}-${{ steps.py.outputs.python-version }}-${{ hashFiles('.pre-commit-config.yaml') }}
+
+          restore-keys: |
+            precommit-${{ runner.os }}-${{ steps.py.outputs.python-version }}-
+
+
+      # ------------------------------------------------------
+      # Step 7: Install project dependencies
+      # ------------------------------------------------------
+      - name: Install dependencies
+        # --no-interaction prevents prompts in CI
+        run: poetry install --no-interaction
+
+
+      # ------------------------------------------------------
+      # Step 8: Run pre-commit
+      # ------------------------------------------------------
+      - name: Run pre-commit on all files
+
+        # Important:
+        #
+        # We DO NOT run "pre-commit install" here.
+        #
+        # Why?
+        # CI is not making commits.
+        # We just want to execute the checks.
+        #
+        # Local developers use:
+        #   pre-commit install
+        #
+        # CI uses:
+        #   pre-commit run
+        #
+        run: |
+          poetry run pre-commit run --all-files --show-diff-on-failure --color=always

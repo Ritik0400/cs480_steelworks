@@ -1,0 +1,134 @@
+# ============================================================
+# .pre-commit-config.yaml
+#
+# This file configures the pre-commit framework.
+#
+# Mental Model:
+# -------------
+# "repos" is a list of hook providers.
+#
+# For each repo entry:
+#   1. pre-commit clones that Git repository
+#   2. checks out the specified version (rev)
+#   3. runs the selected hook IDs
+#
+# When you run:
+#     poetry run pre-commit install
+#
+# pre-commit installs a Git hook inside:
+#     .git/hooks/pre-commit
+#
+# After that, every `git commit` automatically
+# executes the hooks defined below.
+# ============================================================
+
+repos:
+
+  # ==========================================================
+  # Remote Hook Provider Example
+  # ==========================================================
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+
+    # "rev" specifies the exact Git tag or commit to use.
+    #
+    # This prevents unpredictable behavior if the upstream
+    # project changes.
+    #
+    # Similar idea to version pinning in requirements.txt.
+    #
+    rev: v0.15.2
+
+    # "hooks" selects which hook definitions from that
+    # repository we want to use.
+    #
+    # A single repo can define multiple hooks.
+    #
+    hooks:
+      - id: ruff-format
+      - id: ruff
+        args: ["--fix"]
+
+    # Important:
+    # ----------
+    # repo → the Git repository containing hook definitions
+    # id   → a specific hook defined inside that repo
+    #
+    # Think of:
+    # repo = module
+    # id   = function inside the module
+
+
+  # ==========================================================
+  # Another Remote Hook Provider
+  # ==========================================================
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.19.1
+    hooks:
+      - id: mypy
+
+  # Each repo is handled independently.
+  #
+  # Pre-commit builds isolated environments per repo
+  # unless "language: system" is used (see local hook below).
+  #
+  # This prevents dependency conflicts between tools.
+
+
+  # ==========================================================
+  # Local Hook (Custom to This Project)
+  # ==========================================================
+  - repo: local
+
+    # "repo: local" means:
+    #   Do NOT clone anything.
+    #   The hook is defined entirely in this project.
+    #
+    # This is how teams define custom rules.
+    #
+    hooks:
+      - id: pytest-tests
+
+        # "id" must be unique within this config file.
+        #
+        # It is simply an internal identifier used
+        # by pre-commit to track the hook.
+        #
+        name: run pytest (all tests must pass)
+
+        # language determines how the hook runs.
+        #
+        # language: system
+        #   → Use the current system / Poetry environment
+        #   → Do NOT create an isolated virtualenv
+        #
+        language: system
+
+        # "entry" is the exact shell command executed.
+        #
+        # Pre-commit literally runs this string.
+        #
+        entry: poetry run pytest -q --maxfail=1 --disable-warnings
+
+        # Explanation of execution behavior:
+        #
+        # By default, pre-commit passes only changed filenames
+        # to hooks.
+        #
+        # For pytest, we want to run the ENTIRE test suite,
+        # not just tests related to changed files.
+        #
+        pass_filenames: false
+
+        # always_run: true ensures the hook runs on
+        # every commit attempt.
+        #
+        # Without this, the hook might be skipped if
+        # pre-commit believes no relevant files changed.
+        #
+        always_run: true
+
+        # Environment variables available only while
+        # this hook executes.
+        #
+        # They do not permanently modify your system.
+        #
