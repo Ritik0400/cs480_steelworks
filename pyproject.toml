@@ -4,28 +4,20 @@ version = "0.1.0"
 description = "Scaffold for SteelWorks operations reporting dashboard"
 authors = ["Ritik0400 <ritik.shrivastava1704@gmail.com>"]
 
-# tell poetry where the package lives
 packages = [
     { include = "steelworks", from = "src" }
 ]
 
 [tool.poetry.dependencies]
 python = "^3.11 || ^3.12 || ^3.13"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.0"
 ruff = "^0.15.2"
 mypy = "^1.19.1"
 pytest-cov = "^7.0.0"
-
-[tool.poetry.dev-dependencies]
-pytest = "^7.0"
+pre-commit = "^4.5.1"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
-
-
-[dependency-groups]
-dev = [
-    "mypy (>=1.19.1,<2.0.0)",
-    "pytest-cov (>=7.0.0,<8.0.0)",
-    "pre-commit (>=4.5.1,<5.0.0)"
-]
