@@ -130,7 +130,7 @@ jobs:
       # Step 5: Cache the virtual environment
       # ------------------------------------------------------
       - name: Cache Poetry venv
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .venv
 
@@ -159,7 +159,7 @@ jobs:
       # Step 6: Cache pre-commit environments
       # ------------------------------------------------------
       - name: Cache pre-commit environments
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           # pre-commit installs hook environments here:
           # ~/.cache/pre-commit
