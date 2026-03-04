@@ -109,7 +109,7 @@ jobs:
       # Step 3: Install Poetry
       # ------------------------------------------------------
       - name: Install Poetry
-        uses: abatilo/actions-poetry@v3
+        uses: abatilo/actions-poetry@v4
         with:
           poetry-version: "2.2.0"
 
