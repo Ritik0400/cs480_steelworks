@@ -132,3 +132,9 @@ repos:
         #
         # They do not permanently modify your system.
         #
+      - id: license-check-gpl
+        name: block copyleft licenses (GPL/AGPL/LGPL)
+        language: system
+        entry: poetry run python scripts/check_gpl_licenses.py
+        pass_filenames: false
+        always_run: true

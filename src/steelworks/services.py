@@ -6,6 +6,7 @@ unimplemented; they exist so that unit tests can be written against their
 signatures.  Detailed docstrings explain intent and expected inputs/outputs.
 """
 
+from collections import defaultdict
 from typing import List, Any, Optional
 from datetime import date
 
@@ -25,15 +26,31 @@ class OperationsService:
         self.repository = repository
 
     def summarize_issues_by_line(
-        self, start_date: Optional[date] = None, end_date: Optional[date] = None
-    ) -> List[Any]:
+        self,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        production_line: Optional[str] = None,
+    ) -> List[tuple[str, int]]:
         """AC3: return lines sorted by total defects in a date range.
 
         The exact return type is a list of tuples or dictionaries; details are
         unimportant for the stub.  Filters are passed through to the
         repository.
         """
-        raise NotImplementedError
+        records = self.repository.get_inspection_records(
+            start_date=start_date,
+            end_date=end_date,
+            production_line=production_line,
+        )
+
+        totals_by_line: dict[str, int] = defaultdict(int)
+        for record in records:
+            defect_qty = record.defect_quantity if record.defect_quantity else 0
+            if defect_qty <= 0:
+                continue
+            totals_by_line[record.production_line] += defect_qty
+
+        return sorted(totals_by_line.items(), key=lambda item: item[1], reverse=True)
 
     def defect_trends(
         self, start_date: Optional[date] = None, end_date: Optional[date] = None
