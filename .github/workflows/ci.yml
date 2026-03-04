@@ -89,7 +89,7 @@ jobs:
       - name: Checkout
         # This clones your repo into the CI virtual machine.
         # Without this step, the runner has no code to test.
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
 
       # ------------------------------------------------------
