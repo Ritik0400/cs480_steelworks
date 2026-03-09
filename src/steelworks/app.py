@@ -2,14 +2,49 @@
 
 from __future__ import annotations
 
+import logging
+from logging.handlers import RotatingFileHandler
 from datetime import date
+from pathlib import Path
 
 import streamlit as st
 
 from steelworks import database, services
 
+LOG_DIR = Path("logs")
+LOG_FILE = LOG_DIR / "steelworks.log"
+MAX_LOG_BYTES = 5 * 1024 * 1024
+BACKUP_COUNT = 3
+
+
+def _configure_logging() -> None:
+    root_logger = logging.getLogger()
+    if any(isinstance(h, RotatingFileHandler) for h in root_logger.handlers):
+        return
+
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    formatter = logging.Formatter(
+        fmt="%(asctime)s %(levelname)s %(name)s %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    handler = RotatingFileHandler(
+        LOG_FILE,
+        maxBytes=MAX_LOG_BYTES,
+        backupCount=BACKUP_COUNT,
+        encoding="utf-8",
+    )
+    handler.setFormatter(formatter)
+
+    root_logger.setLevel(logging.INFO)
+    root_logger.addHandler(handler)
+
+
+logger = logging.getLogger(__name__)
+
 
 def main() -> None:
+    _configure_logging()
+    logger.info("Application startup")
     database.init_db()
 
     st.title("SteelWorks Operations Dashboard")
@@ -31,6 +66,7 @@ def main() -> None:
         st.info("No data for selected filters.")
 
     st.header("Defect Trends (weekly)")
+    logger.info('User opened "Recurring Defects" page')
     trends = services.get_defect_trends(
         start=start_date,
         end=end_date,
