@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import date
 from typing import Callable, ContextManager, List, Optional, cast
 
@@ -21,6 +22,7 @@ from .orm_models import (
 
 
 SessionFactory = Callable[[], ContextManager[Session]]
+logger = logging.getLogger(__name__)
 
 
 class Repository:
@@ -35,23 +37,33 @@ class Repository:
         end_date: Optional[date] = None,
         production_line: Optional[str] = None,
     ) -> List[ProductionRecord]:
-        with self._session_factory() as session:
-            stmt: Select[tuple[ProductionRow, Lot, ProductionLine]] = (
-                select(ProductionRow, Lot, ProductionLine)
-                .join(Lot, ProductionRow.lot_id == Lot.id)
-                .join(
-                    ProductionLine,
-                    ProductionRow.production_line_id == ProductionLine.id,
+        try:
+            with self._session_factory() as session:
+                stmt: Select[tuple[ProductionRow, Lot, ProductionLine]] = (
+                    select(ProductionRow, Lot, ProductionLine)
+                    .join(Lot, ProductionRow.lot_id == Lot.id)
+                    .join(
+                        ProductionLine,
+                        ProductionRow.production_line_id == ProductionLine.id,
+                    )
                 )
-            )
-            if start_date:
-                stmt = stmt.where(ProductionRow.date >= start_date)
-            if end_date:
-                stmt = stmt.where(ProductionRow.date <= end_date)
-            if production_line:
-                stmt = stmt.where(ProductionLine.line == production_line)
+                if start_date:
+                    stmt = stmt.where(ProductionRow.date >= start_date)
+                if end_date:
+                    stmt = stmt.where(ProductionRow.date <= end_date)
+                if production_line:
+                    stmt = stmt.where(ProductionLine.line == production_line)
 
-            rows = session.execute(stmt).all()
+                rows = session.execute(stmt).all()
+        except Exception:
+            logger.exception("Database query failure for production records")
+            raise
+        logger.info("Production query completed", extra={"row_count": len(rows)})
+        if len(rows) > 10000:
+            logger.warning(
+                "Very large query result",
+                extra={"query": "get_production_records", "row_count": len(rows)},
+            )
 
         return [
             ProductionRecord(
@@ -70,26 +82,40 @@ class Repository:
         end_date: Optional[date] = None,
         production_line: Optional[str] = None,
     ) -> List[InspectionRecord]:
-        with self._session_factory() as session:
-            stmt: Select[
-                tuple[InspectionRow, Lot, ProductionLine, Optional[DefectRow]]
-            ] = (
-                select(InspectionRow, Lot, ProductionLine, DefectRow)
-                .join(Lot, InspectionRow.lot_id == Lot.id)
-                .join(
-                    ProductionLine,
-                    InspectionRow.production_line_id == ProductionLine.id,
+        try:
+            with self._session_factory() as session:
+                stmt = (
+                    select(InspectionRow, Lot, ProductionLine, DefectRow)
+                    .join(Lot, InspectionRow.lot_id == Lot.id)
+                    .join(
+                        ProductionLine,
+                        InspectionRow.production_line_id == ProductionLine.id,
+                    )
+                    .outerjoin(DefectRow, InspectionRow.defect_id == DefectRow.id)
                 )
-                .outerjoin(DefectRow, InspectionRow.defect_id == DefectRow.id)
-            )
-            if start_date:
-                stmt = stmt.where(InspectionRow.inspection_date >= start_date)
-            if end_date:
-                stmt = stmt.where(InspectionRow.inspection_date <= end_date)
-            if production_line:
-                stmt = stmt.where(ProductionLine.line == production_line)
+                if start_date:
+                    stmt = stmt.where(InspectionRow.inspection_date >= start_date)
+                if end_date:
+                    stmt = stmt.where(InspectionRow.inspection_date <= end_date)
+                if production_line:
+                    stmt = stmt.where(ProductionLine.line == production_line)
 
-            rows = session.execute(stmt).all()
+                rows = session.execute(stmt).all()
+        except Exception:
+            logger.exception("Database query failure for inspection records")
+            raise
+        logger.info(
+            "Inspection query completed",
+            extra={
+                "number_of_inspections": len(rows),
+                "production_line": production_line,
+            },
+        )
+        if len(rows) > 10000:
+            logger.warning(
+                "Very large query result",
+                extra={"query": "get_inspection_records", "row_count": len(rows)},
+            )
 
         return [
             InspectionRecord(
@@ -104,22 +130,26 @@ class Repository:
         ]
 
     def get_shipping_record_for_lot(self, lot_id: str) -> Optional[ShippingRecord]:
-        with self._session_factory() as session:
-            lot = session.execute(
-                select(Lot).where(Lot.lot == lot_id)
-            ).scalar_one_or_none()
-            if lot is None:
-                return None
+        try:
+            with self._session_factory() as session:
+                lot = session.execute(
+                    select(Lot).where(Lot.lot == lot_id)
+                ).scalar_one_or_none()
+                if lot is None:
+                    return None
 
-            stmt = (
-                select(ShippingRow)
-                .where(ShippingRow.lot_id == lot.id)
-                .order_by(desc(ShippingRow.ship_date))
-                .limit(1)
-            )
-            row = session.execute(stmt).scalar_one_or_none()
-            if row is None:
-                return None
+                stmt = (
+                    select(ShippingRow)
+                    .where(ShippingRow.lot_id == lot.id)
+                    .order_by(desc(ShippingRow.ship_date))
+                    .limit(1)
+                )
+                row = session.execute(stmt).scalar_one_or_none()
+                if row is None:
+                    return None
+        except Exception:
+            logger.exception("Database query failure for shipping lookup")
+            raise
 
         return ShippingRecord(
             id=row.id,
