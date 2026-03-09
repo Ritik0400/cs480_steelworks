@@ -1,28 +1,20 @@
-"""Business logic layer for operations reporting.
+"""Business logic layer for operations reporting."""
 
-This module contains classes whose methods correspond directly to the
-acceptance criteria listed in the user story.  Methods are currently
-unimplemented; they exist so that unit tests can be written against their
-signatures.  Detailed docstrings explain intent and expected inputs/outputs.
-"""
+from __future__ import annotations
 
 from collections import defaultdict
-from typing import List, Any, Optional
 from datetime import date
+from typing import Optional
 
+from .models import ShippingRecord
 from .repository import Repository
+from .utils import normalize_lot_id
 
 
 class OperationsService:
-    """Core service that produces analytics summaries.
-
-    A real implementation would combine data from production,
-    inspection and shipping records, apply filters, and compute aggregates.
-    Each public method below maps to one or more ACs from the user story.
-    """
+    """Service methods implementing Operations acceptance criteria."""
 
     def __init__(self, repository: Repository):
-        # repository is injected to allow easy mocking in tests
         self.repository = repository
 
     def summarize_issues_by_line(
@@ -30,13 +22,7 @@ class OperationsService:
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
         production_line: Optional[str] = None,
-    ) -> List[tuple[str, int]]:
-        """AC3: return lines sorted by total defects in a date range.
-
-        The exact return type is a list of tuples or dictionaries; details are
-        unimportant for the stub.  Filters are passed through to the
-        repository.
-        """
+    ) -> list[tuple[str, int]]:
         records = self.repository.get_inspection_records(
             start_date=start_date,
             end_date=end_date,
@@ -45,7 +31,7 @@ class OperationsService:
 
         totals_by_line: dict[str, int] = defaultdict(int)
         for record in records:
-            defect_qty = record.defect_quantity if record.defect_quantity else 0
+            defect_qty = record.defect_quantity or 0
             if defect_qty <= 0:
                 continue
             totals_by_line[record.production_line] += defect_qty
@@ -53,20 +39,78 @@ class OperationsService:
         return sorted(totals_by_line.items(), key=lambda item: item[1], reverse=True)
 
     def defect_trends(
-        self, start_date: Optional[date] = None, end_date: Optional[date] = None
-    ) -> Any:
-        """AC4: defect counts grouped by week for a date range.
+        self,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        production_line: Optional[str] = None,
+    ) -> list[tuple[str, str, int]]:
+        records = self.repository.get_inspection_records(
+            start_date=start_date,
+            end_date=end_date,
+            production_line=production_line,
+        )
 
-        This would typically return a time series structure that can be
-        plotted or iterated over.
-        """
-        raise NotImplementedError
+        weekly_totals: dict[tuple[str, str], int] = defaultdict(int)
+        for record in records:
+            if not record.defect_code:
+                continue
+            quantity = record.defect_quantity or 0
+            if quantity <= 0:
+                continue
+            year, week, _ = record.inspection_date.isocalendar()
+            week_key = f"{year}-W{week:02d}"
+            weekly_totals[(week_key, record.defect_code)] += quantity
 
-    def check_lot_shipped(self, lot_id: str) -> Any:
-        """AC5 & AC6: return shipment status and date for the normalized lot.
+        return [
+            (week_key, defect_code, total)
+            for (week_key, defect_code), total in sorted(weekly_totals.items())
+        ]
 
-        The service is responsible for calling the normalize_lot_id helper
-        before querying the repository.  It may return a tuple like
-        `(shipped: bool, date: Optional[date])`.
-        """
-        raise NotImplementedError
+    def check_lot_shipped(self, lot_id: str) -> tuple[bool, Optional[date]]:
+        normalized_lot_id = normalize_lot_id(lot_id)
+        shipping_record: Optional[ShippingRecord] = (
+            self.repository.get_shipping_record_for_lot(normalized_lot_id)
+        )
+        if shipping_record is None:
+            return False, None
+
+        has_shipped = shipping_record.status.strip().lower() == "shipped"
+        return has_shipped, shipping_record.shipped_at
+
+
+def _default_service() -> OperationsService:
+    return OperationsService(repository=Repository())
+
+
+def get_defect_summary(
+    start: Optional[date] = None,
+    end: Optional[date] = None,
+    line: Optional[str] = None,
+) -> list[tuple[str, int]]:
+    return _default_service().summarize_issues_by_line(
+        start_date=start,
+        end_date=end,
+        production_line=line,
+    )
+
+
+def get_defect_trends(
+    start: Optional[date] = None,
+    end: Optional[date] = None,
+    line: Optional[str] = None,
+) -> list[tuple[str, str, int]]:
+    return _default_service().defect_trends(
+        start_date=start,
+        end_date=end,
+        production_line=line,
+    )
+
+
+def lookup_shipment(lot_id: str) -> Optional[tuple[bool, Optional[date]]]:
+    normalized_lot_id = normalize_lot_id(lot_id)
+    record = _default_service().repository.get_shipping_record_for_lot(
+        normalized_lot_id
+    )
+    if record is None:
+        return None
+    return record.status.strip().lower() == "shipped", record.shipped_at
