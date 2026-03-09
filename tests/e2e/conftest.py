@@ -12,7 +12,13 @@ import pytest
 from dotenv import dotenv_values
 
 from steelworks import database
-from steelworks.orm_models import InspectionRow, Lot, ProductionLine, ShippingRow
+from steelworks.orm_models import (
+    DefectRow,
+    InspectionRow,
+    Lot,
+    ProductionLine,
+    ShippingRow,
+)
 
 
 def _test_database_url() -> str:
@@ -56,20 +62,36 @@ def running_streamlit_app(app_base_url: str):
     database.init_db()
 
     with database.get_session() as session:
-        lot = Lot(lot_id="LOT100")
-        line = ProductionLine(line_name="LINE-Z")
-        session.add_all([lot, line])
+        lot = Lot(lot="LOT100")
+        line = ProductionLine(line="LINE-Z")
+        defect = DefectRow(defect_code="CRACK")
+        session.add_all([lot, line, defect])
         session.flush()
         session.add(
             InspectionRow(
                 lot_id=lot.id,
                 production_line_id=line.id,
                 inspection_date=date.today(),
-                defect_code="CRACK",
-                defect_quantity=4,
+                defect_id=defect.id,
+                qty_defects=4,
+                qty_checked=100,
+                inspector="I1",
+                part_number="P1",
             )
         )
-        session.add(ShippingRow(lot_id=lot.id, shipped_at=None, status="pending"))
+        session.add(
+            ShippingRow(
+                lot_id=lot.id,
+                ship_date=date.today(),
+                ship_status="Pending",
+                sales_order_no="SO100",
+                customer="C1",
+                destination_state="WA",
+                carrier="Carrier",
+                bol_no="BOL-100",
+                qty_shipped=10,
+            )
+        )
 
     env = os.environ.copy()
     env["DATABASE_URL"] = test_db_url

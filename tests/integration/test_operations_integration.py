@@ -8,7 +8,13 @@ import pytest
 from dotenv import dotenv_values
 
 from steelworks import database, services
-from steelworks.orm_models import InspectionRow, Lot, ProductionLine, ShippingRow
+from steelworks.orm_models import (
+    DefectRow,
+    InspectionRow,
+    Lot,
+    ProductionLine,
+    ShippingRow,
+)
 
 
 def _test_database_url() -> str:
@@ -34,11 +40,13 @@ def integration_database():
     database.init_db()
 
     with database.get_session() as session:
-        lot_a = Lot(lot_id="LOT001")
-        lot_b = Lot(lot_id="LOT002")
-        line_a = ProductionLine(line_name="LINE-A")
-        line_b = ProductionLine(line_name="LINE-B")
-        session.add_all([lot_a, lot_b, line_a, line_b])
+        lot_a = Lot(lot="LOT001")
+        lot_b = Lot(lot="LOT002")
+        line_a = ProductionLine(line="LINE-A")
+        line_b = ProductionLine(line="LINE-B")
+        defect_dent = DefectRow(defect_code="DENT")
+        defect_scratch = DefectRow(defect_code="SCRATCH")
+        session.add_all([lot_a, lot_b, line_a, line_b, defect_dent, defect_scratch])
         session.flush()
 
         session.add_all(
@@ -47,27 +55,42 @@ def integration_database():
                     lot_id=lot_a.id,
                     production_line_id=line_a.id,
                     inspection_date=date(2026, 3, 1),
-                    defect_code="DENT",
-                    defect_quantity=2,
+                    defect_id=defect_dent.id,
+                    qty_defects=2,
+                    qty_checked=100,
+                    inspector="I1",
+                    part_number="P1",
                 ),
                 InspectionRow(
                     lot_id=lot_b.id,
                     production_line_id=line_a.id,
                     inspection_date=date(2026, 3, 8),
-                    defect_code="DENT",
-                    defect_quantity=3,
+                    defect_id=defect_dent.id,
+                    qty_defects=3,
+                    qty_checked=100,
+                    inspector="I1",
+                    part_number="P1",
                 ),
                 InspectionRow(
                     lot_id=lot_b.id,
                     production_line_id=line_b.id,
                     inspection_date=date(2026, 3, 9),
-                    defect_code="SCRATCH",
-                    defect_quantity=1,
+                    defect_id=defect_scratch.id,
+                    qty_defects=1,
+                    qty_checked=100,
+                    inspector="I1",
+                    part_number="P1",
                 ),
                 ShippingRow(
                     lot_id=lot_a.id,
-                    shipped_at=date(2026, 3, 10),
-                    status="shipped",
+                    ship_date=date(2026, 3, 10),
+                    ship_status="Shipped",
+                    sales_order_no="SO1",
+                    customer="C1",
+                    destination_state="WA",
+                    carrier="Carrier",
+                    bol_no="BOL-001",
+                    qty_shipped=100,
                 ),
             ]
         )
