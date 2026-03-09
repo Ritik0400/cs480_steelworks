@@ -37,7 +37,7 @@ def init_db() -> None:
 
 def drop_db() -> None:
     """Drop all tables for the current engine."""
-    Base.metadata.drop_all(bind=engine)
+    Base.metadata.drop_all(bind=engine, checkfirst=True)
 
 
 @contextmanager
