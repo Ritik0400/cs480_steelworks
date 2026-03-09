@@ -65,6 +65,8 @@ repos:
     rev: v1.19.1
     hooks:
       - id: mypy
+        args: ["src/"]
+        pass_filenames: false
 
   # Each repo is handled independently.
   #
