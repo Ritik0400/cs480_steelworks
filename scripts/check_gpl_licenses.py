@@ -28,7 +28,7 @@ def main() -> int:
         return 1
 
     dependencies: list[dict[str, Any]] = json.loads(result.stdout)
-    copyleft_pattern = re.compile(r"\b(?:AGPL|GPL|LGPL)\b", re.IGNORECASE)
+    copyleft_pattern = re.compile(r"^(?:AGPL|GPL|LGPL)", re.IGNORECASE)
     project_lock = Path("poetry.lock")
     locked_packages: set[str] = set()
     if project_lock.exists():
@@ -46,7 +46,7 @@ def main() -> int:
         if locked_packages and package_name.lower() not in locked_packages:
             continue
         license_name = str(dependency.get("License", ""))
-        if copyleft_pattern.search(license_name):
+        if copyleft_pattern.search(license_name.strip()):
             blocked.append((package_name, license_name))
 
     if blocked:
